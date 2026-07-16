@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 import {
   listPeople, createPerson, updatePerson, deletePerson,
   importPersonFromTmdb,
@@ -13,7 +14,7 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { IMAGE_BASE_URL } from "@/lib/supabase";
 import {
   Search, Plus, Pencil, Trash2, ChevronLeft, ChevronRight, User,
-  ExternalLink, X, Save, AlertCircle, Download,
+  ExternalLink, X, Save, AlertCircle, Download, Upload,
 } from "lucide-react";
 
 interface PersonForm {
@@ -310,15 +311,41 @@ export function AdminPeoplePage() {
                   <Input value={form.place_of_birth} onChange={(e) => setField("place_of_birth", e.target.value)} />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="text-xs text-text-muted mb-1 block">Profile Path</label>
-                  <Input value={form.profile_path} onChange={(e) => setField("profile_path", e.target.value)} placeholder="/path.jpg" />
+                  <label className="text-xs text-text-muted mb-1 block">Profile Image</label>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 px-4 py-2 bg-surface border border-border rounded-lg text-sm text-text cursor-pointer hover:bg-surface-hover transition-colors">
+                      <Upload className="w-4 h-4" />
+                      Upload Image
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !editId) return;
+                          const ext = file.name.split(".").pop();
+                          const path = `people/${editId}.${ext}`;
+                          const { error } = await supabase.storage.from("admin-uploads").upload(path, file, { upsert: true });
+                          if (!error) {
+                            const { data: urlData } = supabase.storage.from("admin-uploads").getPublicUrl(path);
+                            setField("profile_path", urlData.publicUrl);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <Input className="mt-2" value={form.profile_path} onChange={(e) => setField("profile_path", e.target.value)} placeholder="Or paste image URL" />
                 </div>
               </div>
 
               {form.profile_path && (
                 <div className="mt-4">
                   <p className="text-xs text-text-muted mb-1">Photo preview</p>
-                  <img src={`${IMAGE_BASE_URL}/w185${form.profile_path}`} alt="" className="w-20 h-20 rounded-full object-cover" />
+                  <img
+                    src={form.profile_path.startsWith("http") ? form.profile_path : `${IMAGE_BASE_URL}/w185${form.profile_path}`}
+                    alt=""
+                    className="w-20 h-20 rounded-full object-cover"
+                  />
                 </div>
               )}
 

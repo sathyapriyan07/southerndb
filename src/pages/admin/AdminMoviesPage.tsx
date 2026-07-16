@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listMovies, createMovie, updateMovie, deleteMovie,
-  importMovieFromTmdb,
+  importMovieFromTmdb, getMediaImages,
 } from "@/services/admin";
 import type { Movie } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { IMAGE_BASE_URL } from "@/lib/supabase";
-import { formatDate, formatNumber } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import {
   Search, Plus, Pencil, Trash2, ChevronLeft, ChevronRight, Film,
-  ExternalLink, X, Save, AlertCircle, Download,
+  ExternalLink, X, Save, AlertCircle, Download, Check,
 } from "lucide-react";
 
 const STATUS_OPTIONS = ["Released", "Post Production", "In Production", "Planned", "Rumored"];
@@ -61,6 +61,12 @@ export function AdminMoviesPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-movies", search, page, sortBy, sortOrder],
     queryFn: () => listMovies({ search, page, sortBy, sortOrder }),
+  });
+
+  const { data: editImages } = useQuery({
+    queryKey: ["admin-movie-images", editId],
+    queryFn: () => getMediaImages("movie", editId!),
+    enabled: !!editId,
   });
 
   const saveMutation = useMutation({
@@ -385,6 +391,89 @@ export function AdminMoviesPage() {
                   <label className="text-xs text-text-muted mb-1 block">Revenue ($)</label>
                   <Input type="number" value={form.revenue} onChange={(e) => setField("revenue", Number(e.target.value))} />
                 </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="adult" checked={form.adult} onChange={(e) => setField("adult", e.target.checked)} className="rounded border-border" />
+                  <label htmlFor="adult" className="text-sm text-text">Adult content</label>
+                </div>
+              </div>
+
+              {/* Image Picker */}
+              {editId && editImages && editImages.length > 0 && (
+                <div className="mt-4 space-y-4">
+                  {/* Posters */}
+                  {editImages.filter((i) => i.image_type === "poster").length > 0 && (
+                    <div>
+                      <p className="text-xs text-text-muted mb-2">Select Poster</p>
+                      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+                        {editImages.filter((i) => i.image_type === "poster").map((img) => (
+                          <button
+                            key={img.file_path}
+                            onClick={() => setField("poster_path", img.file_path)}
+                            className={`relative shrink-0 w-20 h-28 rounded-lg overflow-hidden border-2 transition-colors ${
+                              form.poster_path === img.file_path ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            <img src={`${IMAGE_BASE_URL}/w185${img.file_path}`} alt="" className="w-full h-full object-cover" />
+                            {form.poster_path === img.file_path && (
+                              <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                                <Check className="w-5 h-5 text-primary" />
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Backdrops */}
+                  {editImages.filter((i) => i.image_type === "backdrop").length > 0 && (
+                    <div>
+                      <p className="text-xs text-text-muted mb-2">Select Backdrop</p>
+                      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+                        {editImages.filter((i) => i.image_type === "backdrop").map((img) => (
+                          <button
+                            key={img.file_path}
+                            onClick={() => setField("backdrop_path", img.file_path)}
+                            className={`relative shrink-0 w-40 h-24 rounded-lg overflow-hidden border-2 transition-colors ${
+                              form.backdrop_path === img.file_path ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            <img src={`${IMAGE_BASE_URL}/w300${img.file_path}`} alt="" className="w-full h-full object-cover" />
+                            {form.backdrop_path === img.file_path && (
+                              <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                                <Check className="w-5 h-5 text-primary" />
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Logos */}
+                  {editImages.filter((i) => i.image_type === "logo").length > 0 && (
+                    <div>
+                      <p className="text-xs text-text-muted mb-2">Select Logo</p>
+                      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+                        {editImages.filter((i) => i.image_type === "logo").map((img) => (
+                          <button
+                            key={img.file_path}
+                            onClick={() => setField("poster_path" as never, img.file_path as never)}
+                            className={`relative shrink-0 h-12 px-4 rounded-lg overflow-hidden border-2 transition-colors bg-surface flex items-center ${
+                              false ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            <img src={`${IMAGE_BASE_URL}/w185${img.file_path}`} alt="" className="h-full object-contain" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Manual path inputs + preview */}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-text-muted mb-1 block">Poster Path</label>
                   <Input value={form.poster_path} onChange={(e) => setField("poster_path", e.target.value)} placeholder="/path.jpg" />
@@ -393,20 +482,14 @@ export function AdminMoviesPage() {
                   <label className="text-xs text-text-muted mb-1 block">Backdrop Path</label>
                   <Input value={form.backdrop_path} onChange={(e) => setField("backdrop_path", e.target.value)} placeholder="/path.jpg" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="adult" checked={form.adult} onChange={(e) => setField("adult", e.target.checked)} className="rounded border-border" />
-                  <label htmlFor="adult" className="text-sm text-text">Adult content</label>
-                </div>
               </div>
 
               {form.poster_path && (
                 <div className="mt-4 flex gap-4">
-                  {form.poster_path && (
-                    <div>
-                      <p className="text-xs text-text-muted mb-1">Poster preview</p>
-                      <img src={`${IMAGE_BASE_URL}/w185${form.poster_path}`} alt="" className="w-24 h-36 rounded-lg object-cover" />
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-xs text-text-muted mb-1">Poster preview</p>
+                    <img src={`${IMAGE_BASE_URL}/w185${form.poster_path}`} alt="" className="w-24 h-36 rounded-lg object-cover" />
+                  </div>
                   {form.backdrop_path && (
                     <div>
                       <p className="text-xs text-text-muted mb-1">Backdrop preview</p>

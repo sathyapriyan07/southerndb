@@ -117,9 +117,17 @@ export function MovieDetailPage() {
             transition={{ duration: 0.4, delay: 0.1 }}
             className="flex-1 min-w-0"
           >
-            <h1 className="text-3xl md:text-5xl font-black font-[family-name:var(--font-display)] text-text leading-tight">
-              {movie.title}
-            </h1>
+            {movie.logo_path ? (
+              <img
+                src={`${IMAGE_BASE_URL}/w500${movie.logo_path}`}
+                alt={movie.title}
+                className="h-12 md:h-16 lg:h-20 object-contain mt-2"
+              />
+            ) : (
+              <h1 className="text-3xl md:text-5xl font-black font-[family-name:var(--font-display)] text-text leading-tight">
+                {movie.title}
+              </h1>
+            )}
 
             {movie.original_title !== movie.title && (
               <p className="text-sm text-text-muted mt-1">Original title: {movie.original_title}</p>
@@ -257,10 +265,7 @@ export function MovieDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-4 rounded-xl bg-surface border border-border">
                 <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Rating</p>
-                <div className="flex items-center gap-2">
-                  <RatingBadge rating={movie.vote_average} size="md" />
-                  <span className="text-sm text-text-muted">{formatNumber(movie.vote_count)} votes</span>
-                </div>
+                <RatingBadge rating={movie.vote_average} size="md" />
               </div>
               {movie.original_title && movie.original_title !== movie.title && (
                 <div className="p-4 rounded-xl bg-surface border border-border">
@@ -334,14 +339,6 @@ export function MovieDetailPage() {
             <div className="space-y-2">
               {cast.map((member) => (
                 <Link key={member.id || member.name + member.character} to={`/person/${member.person?.id || ""}`} className="flex items-center gap-3 p-3 rounded-xl bg-surface border border-border hover:border-primary/30 transition-colors">
-                  <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-border">
-                    <ImageWithLoader
-                      src={profileUrl(member.profile_path, "small")}
-                      alt={member.name}
-                      className="w-full h-full object-cover"
-                      fallback="/placeholder-profile.svg"
-                    />
-                  </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-text line-clamp-1">{member.name}</p>
                     <p className="text-xs text-text-muted line-clamp-1">{member.character}</p>
@@ -367,14 +364,6 @@ export function MovieDetailPage() {
                 }
                 return Array.from(grouped.values()).map(({ member, jobs }) => (
                   <Link key={member.id || member.name} to={`/person/${member.person?.id || ""}`} className="flex items-center gap-3 p-3 rounded-xl bg-surface border border-border hover:border-primary/30 transition-colors">
-                    <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-border">
-                      <ImageWithLoader
-                        src={profileUrl(member.profile_path, "small")}
-                        alt={member.name}
-                        className="w-full h-full object-cover"
-                        fallback="/placeholder-profile.svg"
-                      />
-                    </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-text line-clamp-1">{member.name}</p>
                       <p className="text-xs text-text-muted line-clamp-1">{jobs.join(", ")}</p>
