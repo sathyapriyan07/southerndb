@@ -31,8 +31,12 @@ export function Navbar() {
       return;
     }
     const timer = setTimeout(async () => {
-      const results = await globalSearch(searchQuery);
-      setSearchResults(results);
+      try {
+        const results = await globalSearch(searchQuery);
+        setSearchResults(results);
+      } catch {
+        setSearchResults({ movies: [], series: [], people: [] });
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);

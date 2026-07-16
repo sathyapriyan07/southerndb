@@ -3,6 +3,7 @@ import { Suspense, lazy } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 
 const HomePage = lazy(() => import("@/pages/HomePage").then((m) => ({ default: m.HomePage })));
@@ -34,7 +35,7 @@ function PageLoader() {
 
 function Layout() {
   return (
-    <>
+    <ErrorBoundary>
       <Navbar />
       <main className="flex-1">
         <Suspense fallback={<PageLoader />}>
@@ -43,16 +44,17 @@ function Layout() {
       </main>
       <Footer />
       <BottomNav />
-    </>
+    </ErrorBoundary>
   );
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<Suspense fallback={<PageLoader />}><HomePage /></Suspense>} />
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<Suspense fallback={<PageLoader />}><HomePage /></Suspense>} />
           <Route path="movies" element={<Suspense fallback={<PageLoader />}><MoviesPage /></Suspense>} />
           <Route path="series" element={<Suspense fallback={<PageLoader />}><SeriesPage /></Suspense>} />
           <Route path="movie/:id" element={<Suspense fallback={<PageLoader />}><MovieDetailPage /></Suspense>} />
@@ -83,5 +85,6 @@ export default function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
