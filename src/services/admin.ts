@@ -24,6 +24,41 @@ function assertResult<T>(result: T | null, error: { message: string; code?: stri
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+async function importMediaImages(
+  mediaType: "movie_id" | "series_id",
+  mediaId: string,
+  tmdbImages: any,
+): Promise<void> {
+  if (!tmdbImages) return;
+
+  await supabase.from("images").delete().eq(mediaType, mediaId);
+
+  const rows: any[] = [];
+  const addImages = (imgs: any[], imageType: string) => {
+    for (const img of (imgs || []).slice(0, 20)) {
+      rows.push({
+        [mediaType]: mediaId,
+        file_path: img.file_path,
+        aspect_ratio: img.aspect_ratio,
+        width: img.width,
+        height: img.height,
+        image_type: imageType,
+      });
+    }
+  };
+
+  addImages(tmdbImages.posters, "poster");
+  addImages(tmdbImages.backdrops, "backdrop");
+  addImages(tmdbImages.logos, "logo");
+
+  if (rows.length) {
+    for (let i = 0; i < rows.length; i += 50) {
+      await supabase.from("images").insert(rows.slice(i, i + 50));
+    }
+  }
+}
+
 export async function importMovieFromTmdb(tmdbId: number): Promise<Movie> {
   const tmdbMovie = await tmdbFetch<any>(`/movie/${tmdbId}`, {
     append_to_response: "credits,videos,images,keywords,recommendations,similar,watch/providers",
@@ -142,11 +177,14 @@ export async function importMovieFromTmdb(tmdbId: number): Promise<Movie> {
     }
   }
 
+  await importMediaImages("movie_id", result.id, tmdbMovie.images);
+
   const personIds = [
     ...(tmdbMovie.credits?.cast?.map((c: any) => c.id) || []),
     ...(tmdbMovie.credits?.crew?.map((c: any) => c.id) || []),
   ];
-  await upsertPersonsFromTmdbIds(personIds);
+  const personMap = await upsertPersonsFromTmdbIds(personIds);
+  await linkCreditsToPeople("movie", result.id, personMap);
 
   await logImport("movie", tmdbId, "success", `Imported ${tmdbMovie.title} (TMDB #${tmdbId})`);
   return result as unknown as Movie;
@@ -274,11 +312,14 @@ export async function importSeriesFromTmdb(tmdbId: number): Promise<Series> {
     }
   }
 
+  await importMediaImages("series_id", result.id, tmdbSeries.images);
+
   const personIds = [
     ...(tmdbSeries.credits?.cast?.map((c: any) => c.id) || []),
     ...(tmdbSeries.credits?.crew?.map((c: any) => c.id) || []),
   ];
-  await upsertPersonsFromTmdbIds(personIds);
+  const personMap = await upsertPersonsFromTmdbIds(personIds);
+  await linkCreditsToPeople("tv", result.id, personMap);
 
   await logImport("series", tmdbId, "success", `Imported ${tmdbSeries.name} (TMDB #${tmdbId})`);
   return result as unknown as Series;
@@ -344,18 +385,20 @@ async function logImport(type: string, tmdbId: number, status: string, message: 
   if (error) console.error("Failed to log import:", error.message);
 }
 
-async function upsertPersonsFromTmdbIds(tmdbIds: number[]): Promise<void> {
+async function upsertPersonsFromTmdbIds(tmdbIds: number[]): Promise<Map<number, string>> {
   const unique = [...new Set(tmdbIds)].filter((id) => id > 0);
-  if (!unique.length) return;
+  const mapping = new Map<number, string>();
+  if (!unique.length) return mapping;
 
-  const { data: existing } = await supabase.from("people").select("tmdb_id").in("tmdb_id", unique);
-  const existingSet = new Set((existing || []).map((p) => p.tmdb_id));
-  const toFetch = unique.filter((id) => !existingSet.has(id));
+  const { data: existing } = await supabase.from("people").select("id, tmdb_id").in("tmdb_id", unique);
+  for (const p of existing || []) mapping.set(p.tmdb_id, p.id);
+
+  const toFetch = unique.filter((id) => !mapping.has(id));
 
   for (const tmdbId of toFetch) {
     try {
       const tmdbPerson = await tmdbFetch<any>(`/person/${tmdbId}`);
-      await supabase.from("people").upsert({
+      const { data } = await supabase.from("people").upsert({
         tmdb_id: tmdbPerson.id,
         name: tmdbPerson.name,
         biography: tmdbPerson.biography || null,
@@ -367,9 +410,26 @@ async function upsertPersonsFromTmdbIds(tmdbIds: number[]): Promise<void> {
         popularity: tmdbPerson.popularity || 0,
         also_known_as: tmdbPerson.also_known_as || [],
         known_for_department: tmdbPerson.known_for_department || "Acting",
-      }, { onConflict: "tmdb_id" });
+      }, { onConflict: "tmdb_id" }).select("id, tmdb_id").single();
+      if (data) mapping.set(data.tmdb_id, data.id);
     } catch (err) {
       console.error(`Failed to upsert person TMDB #${tmdbId}:`, err);
+    }
+  }
+
+  return mapping;
+}
+
+async function linkCreditsToPeople(mediaType: "movie" | "tv", mediaId: string, tmdbIdMap: Map<number, string>): Promise<void> {
+  if (tmdbIdMap.size === 0) return;
+  const fkCol = mediaType === "movie" ? "movie_id" : "series_id";
+  const { data: credits } = await supabase.from("credits").select("id, tmdb_id").eq(fkCol, mediaId);
+  if (!credits?.length) return;
+
+  for (const credit of credits) {
+    const personId = tmdbIdMap.get(credit.tmdb_id);
+    if (personId) {
+      await supabase.from("credits").update({ person_id: personId }).eq("id", credit.id);
     }
   }
 }
@@ -423,4 +483,143 @@ export async function getImportLogs(type?: string, page = 1): Promise<{ data: Im
   const { data, count, error } = await query;
   if (error) throw error;
   return { data: (data || []) as unknown as ImportLog[], count: count || 0 };
+}
+
+export async function setMovieAdminOverride(movieId: string, overrides: Record<string, string | null>): Promise<void> {
+  const { data: existing } = await supabase.from("movies").select("admin_overrides").eq("id", movieId).single();
+  const merged = { ...(existing?.admin_overrides || {}), ...overrides };
+  for (const [k, v] of Object.entries(merged)) {
+    if (v === null) delete merged[k];
+  }
+  const { error } = await supabase.from("movies").update({ admin_overrides: merged }).eq("id", movieId);
+  if (error) throw error;
+}
+
+export async function setSeriesAdminOverride(seriesId: string, overrides: Record<string, string | null>): Promise<void> {
+  const { data: existing } = await supabase.from("series").select("admin_overrides").eq("id", seriesId).single();
+  const merged = { ...(existing?.admin_overrides || {}), ...overrides };
+  for (const [k, v] of Object.entries(merged)) {
+    if (v === null) delete merged[k];
+  }
+  const { error } = await supabase.from("series").update({ admin_overrides: merged }).eq("id", seriesId);
+  if (error) throw error;
+}
+
+export async function getMediaImages(mediaType: "movie" | "series", mediaId: string): Promise<{ file_path: string; image_type: string; aspect_ratio: number; width: number; height: number }[]> {
+  const fkCol = mediaType === "movie" ? "movie_id" : "series_id";
+  const { data, error } = await supabase
+    .from("images")
+    .select("file_path, image_type, aspect_ratio, width, height")
+    .eq(fkCol, mediaId)
+    .order("aspect_ratio", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// ============================================================
+// ADMIN CRUD
+// ============================================================
+
+const CRUD_PAGE_SIZE = 25;
+
+export async function listMovies(params?: { search?: string; page?: number; sortBy?: string; sortOrder?: "asc" | "desc" }) {
+  let q = supabase.from("movies").select("*", { count: "exact" });
+  if (params?.search) q = q.or(`title.ilike.%${params.search}%,original_title.ilike.%${params.search}%`);
+  q = q.order(params?.sortBy || "created_at", { ascending: params?.sortOrder === "asc" });
+  const page = params?.page || 1;
+  q = q.range((page - 1) * CRUD_PAGE_SIZE, page * CRUD_PAGE_SIZE - 1);
+  const { data, count, error } = await q;
+  if (error) throw error;
+  return { data: (data || []) as Movie[], count: count || 0 };
+}
+
+export async function getMovieForEdit(id: string) {
+  const { data, error } = await supabase.from("movies").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data as Movie;
+}
+
+export async function createMovie(input: Record<string, unknown>) {
+  const { data, error } = await supabase.from("movies").insert(input).select().single();
+  assertResult(data, error, "Failed to create movie");
+  return data as Movie;
+}
+
+export async function updateMovie(id: string, input: Record<string, unknown>) {
+  const { data, error } = await supabase.from("movies").update({ ...input, updated_at: new Date().toISOString() }).eq("id", id).select().single();
+  assertResult(data, error, "Failed to update movie");
+  return data as Movie;
+}
+
+export async function deleteMovie(id: string) {
+  const { error } = await supabase.from("movies").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function listSeries(params?: { search?: string; page?: number; sortBy?: string; sortOrder?: "asc" | "desc" }) {
+  let q = supabase.from("series").select("*", { count: "exact" });
+  if (params?.search) q = q.or(`name.ilike.%${params.search}%,original_name.ilike.%${params.search}%`);
+  q = q.order(params?.sortBy || "created_at", { ascending: params?.sortOrder === "asc" });
+  const page = params?.page || 1;
+  q = q.range((page - 1) * CRUD_PAGE_SIZE, page * CRUD_PAGE_SIZE - 1);
+  const { data, count, error } = await q;
+  if (error) throw error;
+  return { data: (data || []) as Series[], count: count || 0 };
+}
+
+export async function getSeriesForEdit(id: string) {
+  const { data, error } = await supabase.from("series").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data as Series;
+}
+
+export async function createSeries(input: Record<string, unknown>) {
+  const { data, error } = await supabase.from("series").insert(input).select().single();
+  assertResult(data, error, "Failed to create series");
+  return data as Series;
+}
+
+export async function updateSeries(id: string, input: Record<string, unknown>) {
+  const { data, error } = await supabase.from("series").update({ ...input, updated_at: new Date().toISOString() }).eq("id", id).select().single();
+  assertResult(data, error, "Failed to update series");
+  return data as Series;
+}
+
+export async function deleteSeries(id: string) {
+  const { error } = await supabase.from("series").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function listPeople(params?: { search?: string; page?: number; sortBy?: string; sortOrder?: "asc" | "desc" }) {
+  let q = supabase.from("people").select("*", { count: "exact" });
+  if (params?.search) q = q.or(`name.ilike.%${params.search}%`);
+  q = q.order(params?.sortBy || "created_at", { ascending: params?.sortOrder === "asc" });
+  const page = params?.page || 1;
+  q = q.range((page - 1) * CRUD_PAGE_SIZE, page * CRUD_PAGE_SIZE - 1);
+  const { data, count, error } = await q;
+  if (error) throw error;
+  return { data: (data || []) as Person[], count: count || 0 };
+}
+
+export async function getPersonForEdit(id: string) {
+  const { data, error } = await supabase.from("people").select("*").eq("id", id).single();
+  if (error) throw error;
+  return data as Person;
+}
+
+export async function createPerson(input: Record<string, unknown>) {
+  const { data, error } = await supabase.from("people").insert(input).select().single();
+  assertResult(data, error, "Failed to create person");
+  return data as Person;
+}
+
+export async function updatePerson(id: string, input: Record<string, unknown>) {
+  const { data, error } = await supabase.from("people").update({ ...input, updated_at: new Date().toISOString() }).eq("id", id).select().single();
+  assertResult(data, error, "Failed to update person");
+  return data as Person;
+}
+
+export async function deletePerson(id: string) {
+  const { error } = await supabase.from("people").delete().eq("id", id);
+  if (error) throw error;
 }

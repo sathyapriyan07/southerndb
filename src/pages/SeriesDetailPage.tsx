@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getSeriesById } from "@/services/series";
+import { setSeriesAdminOverride } from "@/services/admin";
+import { useAuth } from "@/contexts/AuthContext";
 import { formatRuntime, formatDate, formatNumber } from "@/lib/utils";
-import { posterUrl, backdropUrl, profileUrl } from "@/lib/supabase";
+import { posterUrl, backdropUrl, profileUrl, IMAGE_BASE_URL } from "@/lib/supabase";
 import { ImageWithLoader } from "@/components/shared/ImageWithLoader";
 import { RatingBadge } from "@/components/shared/StarRating";
 import { MediaCarousel } from "@/components/shared/MediaCarousel";
@@ -16,12 +18,20 @@ import { Calendar, Clock, Play, Bookmark, Heart, ChevronDown, ChevronUp } from "
 
 export function SeriesDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null);
+  const [imageFilter, setImageFilter] = useState<"all" | "poster" | "backdrop" | "logo">("all");
 
   const { data: series, isLoading, error } = useQuery({
     queryKey: ["series", id],
     queryFn: () => getSeriesById(id!),
     enabled: !!id,
+  });
+
+  const overrideMutation = useMutation({
+    mutationFn: (overrides: Record<string, string | null>) => setSeriesAdminOverride(id!, overrides),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["series", id] }),
   });
 
   if (isLoading) {
@@ -194,7 +204,7 @@ export function SeriesDetailPage() {
             <h2 className="text-xl font-bold text-text font-[family-name:var(--font-display)] mb-4">Cast</h2>
             <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-4">
               {cast.map((member) => (
-                <Link key={member.id || member.name + member.character} to={`/person/${member.id}`} className="shrink-0 w-28 text-center group">
+                <Link key={member.id || member.name + member.character} to={`/person/${member.person?.id || ""}`} className="shrink-0 w-28 text-center group">
                   <div className="w-20 h-20 md:w-24 md:h-24 mx-auto rounded-full overflow-hidden border-2 border-border group-hover:border-primary/50 transition-colors">
                     <ImageWithLoader src={profileUrl(member.profile_path, "small")} alt={member.name} className="w-full h-full object-cover" fallback="/placeholder-profile.svg" />
                   </div>
@@ -202,6 +212,83 @@ export function SeriesDetailPage() {
                   <p className="text-[10px] text-text-muted line-clamp-1">{member.character}</p>
                 </Link>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* Images Gallery */}
+        {series.images && series.images.length > 0 && (
+          <section className="mt-12 mb-12">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-text font-[family-name:var(--font-display)]">Images</h2>
+              {user?.id && (
+                <div className="flex gap-1.5">
+                  {(["all", "poster", "backdrop", "logo"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setImageFilter(t)}
+                      className={`px-3 py-1 text-xs rounded-full capitalize transition-colors ${
+                        imageFilter === t
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-surface text-text-muted hover:text-text"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {series.images
+                .filter((img) => imageFilter === "all" || (img as unknown as { image_type?: string }).image_type === imageFilter)
+                .map((img, i) => {
+                  const imgType = (img as unknown as { image_type?: string }).image_type;
+                  const isAdmin = user?.id;
+                  return (
+                    <div
+                      key={`${img.file_path}-${i}`}
+                      className="group relative rounded-lg overflow-hidden bg-surface border border-border hover:border-primary/50 transition-colors cursor-pointer"
+                    >
+                      <div className="aspect-video">
+                        <img
+                          src={`${IMAGE_BASE_URL}/w500${img.file_path}`}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="absolute top-2 right-2">
+                        <Badge variant="outline" className="text-[10px] bg-black/60 backdrop-blur-sm">
+                          {imgType || "unknown"}
+                        </Badge>
+                      </div>
+                      {isAdmin && (
+                        <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5">
+                          {imgType !== "logo" && (
+                            <button
+                              onClick={() => {
+                                const key = imgType === "backdrop" ? "backdrop_path" : "poster_path";
+                                overrideMutation.mutate({ [key]: img.file_path });
+                              }}
+                              className="flex-1 text-[10px] font-medium px-2 py-1 rounded bg-primary/90 text-primary-foreground hover:bg-primary transition-colors"
+                            >
+                              Set {imgType === "backdrop" ? "Backdrop" : "Poster"}
+                            </button>
+                          )}
+                          {imgType === "logo" && (
+                            <button
+                              onClick={() => overrideMutation.mutate({ logo_path: img.file_path })}
+                              className="flex-1 text-[10px] font-medium px-2 py-1 rounded bg-primary/90 text-primary-foreground hover:bg-primary transition-colors"
+                            >
+                              Set Logo
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           </section>
         )}

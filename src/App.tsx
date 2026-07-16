@@ -24,6 +24,9 @@ const GenrePage = lazy(() => import("@/pages/GenrePage").then((m) => ({ default:
 const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const AdminImport = lazy(() => import("@/pages/admin/AdminImport").then((m) => ({ default: m.AdminImport })));
+const AdminMoviesPage = lazy(() => import("@/pages/admin/AdminMoviesPage").then((m) => ({ default: m.AdminMoviesPage })));
+const AdminSeriesPage = lazy(() => import("@/pages/admin/AdminSeriesPage").then((m) => ({ default: m.AdminSeriesPage })));
+const AdminPeoplePage = lazy(() => import("@/pages/admin/AdminPeoplePage").then((m) => ({ default: m.AdminPeoplePage })));
 
 function PageLoader() {
   return (
@@ -73,6 +76,9 @@ export default function App() {
           <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
           <Route path="admin" element={<Suspense fallback={<PageLoader />}><AdminDashboard /></Suspense>} />
           <Route path="admin/import" element={<Suspense fallback={<PageLoader />}><AdminImport /></Suspense>} />
+          <Route path="admin/movies" element={<Suspense fallback={<PageLoader />}><AdminMoviesPage /></Suspense>} />
+          <Route path="admin/series" element={<Suspense fallback={<PageLoader />}><AdminSeriesPage /></Suspense>} />
+          <Route path="admin/people" element={<Suspense fallback={<PageLoader />}><AdminPeoplePage /></Suspense>} />
           <Route path="*" element={
             <div className="min-h-screen flex items-center justify-center">
               <div className="text-center">

@@ -2,16 +2,24 @@ import { supabase } from "@/lib/supabase";
 import type { Person, CreditItem } from "@/types/database";
 
 export async function getPerson(id: string): Promise<Person> {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("people")
     .select("*")
     .eq("id", id)
     .single();
+
+  if (!data) {
+    const byTmdb = await supabase.from("people").select("*").eq("tmdb_id", Number(id)).single();
+    data = byTmdb.data;
+    error = byTmdb.error;
+  }
+
   if (error) throw error;
+  if (!data) throw new Error("Person not found");
 
   const [movieCredits, tvCredits] = await Promise.all([
-    supabase.from("credits").select("*, movie:movies(*)").eq("person_id", id).eq("media_type", "movie"),
-    supabase.from("credits").select("*, series:series(*)").eq("person_id", id).eq("media_type", "tv"),
+    supabase.from("credits").select("*, movie:movies(*)").eq("person_id", data.id).eq("media_type", "movie"),
+    supabase.from("credits").select("*, series:series(*)").eq("person_id", data.id).eq("media_type", "tv"),
   ]);
 
   return {

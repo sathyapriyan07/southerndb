@@ -40,8 +40,8 @@ export async function getMovie(id: string): Promise<Movie> {
     .select(`
       *,
       genres:movie_genres(genre:genres(*)),
-      cast:credits(*),
-      crew:credits(*),
+      cast:credits(*, person:people(id, tmdb_id)),
+      crew:credits(*, person:people(id, tmdb_id)),
       videos:videos(*),
       images:images(*),
       streaming_providers:providers(*),
@@ -52,8 +52,12 @@ export async function getMovie(id: string): Promise<Movie> {
   if (error) throw error;
 
   const raw = data as any;
+  const overrides = raw.admin_overrides || {};
   return {
     ...raw,
+    poster_path: overrides.poster_path ?? raw.poster_path,
+    backdrop_path: overrides.backdrop_path ?? raw.backdrop_path,
+    logo_path: overrides.logo_path ?? raw.logo_path,
     genres: (raw.genres || []).map((g: any) => g.genre).filter(Boolean),
     cast: (raw.cast || []).filter((c: any) => c.department === "Acting" || !c.department),
     crew: (raw.crew || []).filter((c: any) => c.department && c.department !== "Acting"),
