@@ -13,6 +13,16 @@ async function tmdbFetch<T>(endpoint: string, params?: Record<string, string>): 
   return res.json();
 }
 
+function assertResult<T>(result: T | null, error: { message: string; code?: string } | null, context: string): T {
+  if (error) {
+    throw new Error(`${context}: ${error.message}${error.code ? ` (${error.code})` : ""}`);
+  }
+  if (!result) {
+    throw new Error(`${context}: Write blocked by RLS. Ensure your user has is_admin = true in user_profiles.`);
+  }
+  return result;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function importMovieFromTmdb(tmdbId: number): Promise<Movie> {
   const tmdbMovie = await tmdbFetch<any>(`/movie/${tmdbId}`, {
@@ -27,39 +37,43 @@ export async function importMovieFromTmdb(tmdbId: number): Promise<Movie> {
     tagline: tmdbMovie.tagline,
     poster_path: tmdbMovie.poster_path,
     backdrop_path: tmdbMovie.backdrop_path,
-    release_date: tmdbMovie.release_date,
-    runtime: tmdbMovie.runtime,
-    vote_average: tmdbMovie.vote_average,
-    vote_count: tmdbMovie.vote_count,
-    popularity: tmdbMovie.popularity,
-    status: tmdbMovie.status,
-    budget: tmdbMovie.budget,
-    revenue: tmdbMovie.revenue,
-    original_language: tmdbMovie.original_language,
-    adult: tmdbMovie.adult,
-    video: tmdbMovie.video,
-    production_companies: tmdbMovie.production_companies,
-    production_countries: tmdbMovie.production_countries,
-    spoken_languages: tmdbMovie.spoken_languages,
+    release_date: tmdbMovie.release_date || null,
+    runtime: tmdbMovie.runtime || null,
+    vote_average: tmdbMovie.vote_average || 0,
+    vote_count: tmdbMovie.vote_count || 0,
+    popularity: tmdbMovie.popularity || 0,
+    status: tmdbMovie.status || "Planned",
+    budget: tmdbMovie.budget || 0,
+    revenue: tmdbMovie.revenue || 0,
+    original_language: tmdbMovie.original_language || "en",
+    adult: tmdbMovie.adult || false,
+    video: tmdbMovie.video || false,
+    production_companies: tmdbMovie.production_companies || [],
+    production_countries: tmdbMovie.production_countries || [],
+    spoken_languages: tmdbMovie.spoken_languages || [],
   };
 
-  const { data: existing } = await supabase.from("movies").select("id").eq("tmdb_id", tmdbId).single();
+  const { data: existing, error: existErr } = await supabase
+    .from("movies").select("id").eq("tmdb_id", tmdbId).single();
 
   let result;
   if (existing) {
-    const { data } = await supabase.from("movies").update(movieData).eq("id", existing.id).select().single();
-    result = data;
+    const { data, error } = await supabase
+      .from("movies").update(movieData).eq("id", existing.id).select().single();
+    result = assertResult(data, error, `Failed to update movie "${tmdbMovie.title}"`);
   } else {
-    const { data } = await supabase.from("movies").insert(movieData).select().single();
-    result = data;
+    const { data, error } = await supabase
+      .from("movies").insert(movieData).select().single();
+    result = assertResult(data, error, `Failed to insert movie "${tmdbMovie.title}"`);
   }
 
   if (tmdbMovie.genres?.length) {
     for (const genre of tmdbMovie.genres) {
-      const { data: genreData } = await supabase.from("genres").select("id").eq("tmdb_id", genre.id).single();
+      const { data: genreData } = await supabase
+        .from("genres").select("id").eq("tmdb_id", genre.id).single();
       if (genreData) {
         await supabase.from("movie_genres").upsert({
-          movie_id: result!.id,
+          movie_id: result.id,
           genre_id: genreData.id,
         });
       }
@@ -68,21 +82,21 @@ export async function importMovieFromTmdb(tmdbId: number): Promise<Movie> {
 
   if (tmdbMovie.credits?.cast) {
     const cast = tmdbMovie.credits.cast.slice(0, 30).map((c: any, i: number) => ({
-      movie_id: result!.id,
+      movie_id: result.id,
       tmdb_id: c.id,
       name: c.name,
       character: c.character,
       profile_path: c.profile_path,
-      order: i,
+      "order": i,
       media_type: "movie",
     }));
-    await supabase.from("credits").delete().eq("movie_id", result!.id).eq("media_type", "movie").eq("department", "Acting");
-    await supabase.from("credits").insert(cast);
+    await supabase.from("credits").delete().eq("movie_id", result.id).eq("media_type", "movie").eq("department", "Acting");
+    if (cast.length) await supabase.from("credits").insert(cast);
   }
 
   if (tmdbMovie.credits?.crew) {
     const crew = tmdbMovie.credits.crew.map((c: any) => ({
-      movie_id: result!.id,
+      movie_id: result.id,
       tmdb_id: c.id,
       name: c.name,
       job: c.job,
@@ -90,21 +104,45 @@ export async function importMovieFromTmdb(tmdbId: number): Promise<Movie> {
       profile_path: c.profile_path,
       media_type: "movie",
     }));
-    await supabase.from("credits").delete().eq("movie_id", result!.id).eq("media_type", "movie").neq("department", "Acting");
-    await supabase.from("credits").insert(crew);
+    await supabase.from("credits").delete().eq("movie_id", result.id).eq("media_type", "movie").neq("department", "Acting");
+    if (crew.length) await supabase.from("credits").insert(crew);
   }
 
   if (tmdbMovie.keywords?.keywords) {
     for (const keyword of tmdbMovie.keywords.keywords) {
       await supabase.from("keywords").upsert({
-        movie_id: result!.id,
+        movie_id: result.id,
         tmdb_id: keyword.id,
         name: keyword.name,
       });
     }
   }
 
-  await logImport("movie", tmdbId, "success", `Imported ${tmdbMovie.title}`);
+  if (tmdbMovie.videos?.results) {
+    for (const video of tmdbMovie.videos.results) {
+      await supabase.from("videos").upsert({
+        movie_id: result.id,
+        tmdb_video_id: video.id,
+        key: video.key,
+        name: video.name,
+        site: video.site,
+        type: video.type,
+        official: video.official,
+      });
+    }
+  }
+
+  if (tmdbMovie.recommendations?.results) {
+    await supabase.from("recommendations").delete().eq("movie_id", result.id);
+    for (const rec of tmdbMovie.recommendations.results.slice(0, 20)) {
+      await supabase.from("recommendations").insert({
+        movie_id: result.id,
+        recommended_movie_id: null,
+      });
+    }
+  }
+
+  await logImport("movie", tmdbId, "success", `Imported ${tmdbMovie.title} (TMDB #${tmdbId})`);
   return result as unknown as Movie;
 }
 
@@ -121,101 +159,151 @@ export async function importSeriesFromTmdb(tmdbId: number): Promise<Series> {
     tagline: tmdbSeries.tagline,
     poster_path: tmdbSeries.poster_path,
     backdrop_path: tmdbSeries.backdrop_path,
-    first_air_date: tmdbSeries.first_air_date,
-    last_air_date: tmdbSeries.last_air_date,
-    number_of_seasons: tmdbSeries.number_of_seasons,
-    number_of_episodes: tmdbSeries.number_of_episodes,
-    vote_average: tmdbSeries.vote_average,
-    vote_count: tmdbSeries.vote_count,
-    popularity: tmdbSeries.popularity,
-    status: tmdbSeries.status,
-    original_language: tmdbSeries.original_language,
-    networks: tmdbSeries.networks,
-    episode_run_time: tmdbSeries.episode_run_time,
+    first_air_date: tmdbSeries.first_air_date || null,
+    last_air_date: tmdbSeries.last_air_date || null,
+    number_of_seasons: tmdbSeries.number_of_seasons || 0,
+    number_of_episodes: tmdbSeries.number_of_episodes || 0,
+    vote_average: tmdbSeries.vote_average || 0,
+    vote_count: tmdbSeries.vote_count || 0,
+    popularity: tmdbSeries.popularity || 0,
+    status: tmdbSeries.status || "Planned",
+    original_language: tmdbSeries.original_language || "en",
+    networks: tmdbSeries.networks || [],
+    created_by: tmdbSeries.created_by || [],
+    episode_run_time: tmdbSeries.episode_run_time || [],
   };
 
-  const { data: existing } = await supabase.from("series").select("id").eq("tmdb_id", tmdbId).single();
+  const { data: existing } = await supabase
+    .from("series").select("id").eq("tmdb_id", tmdbId).single();
 
   let result;
   if (existing) {
-    const { data } = await supabase.from("series").update(seriesData).eq("id", existing.id).select().single();
-    result = data;
+    const { data, error } = await supabase
+      .from("series").update(seriesData).eq("id", existing.id).select().single();
+    result = assertResult(data, error, `Failed to update series "${tmdbSeries.name}"`);
   } else {
-    const { data } = await supabase.from("series").insert(seriesData).select().single();
-    result = data;
+    const { data, error } = await supabase
+      .from("series").insert(seriesData).select().single();
+    result = assertResult(data, error, `Failed to insert series "${tmdbSeries.name}"`);
   }
 
   if (tmdbSeries.genres?.length) {
     for (const genre of tmdbSeries.genres) {
-      const { data: genreData } = await supabase.from("genres").select("id").eq("tmdb_id", genre.id).single();
+      const { data: genreData } = await supabase
+        .from("genres").select("id").eq("tmdb_id", genre.id).single();
       if (genreData) {
-        await supabase.from("series_genres").upsert({ series_id: result!.id, genre_id: genreData.id });
+        await supabase.from("series_genres").upsert({ series_id: result.id, genre_id: genreData.id });
       }
     }
   }
 
   if (tmdbSeries.seasons) {
     for (const season of tmdbSeries.seasons) {
-      await supabase.from("seasons").upsert({
-        series_id: result!.id,
-        tmdb_id: season.id,
-        season_number: season.season_number,
-        name: season.name,
-        overview: season.overview,
-        poster_path: season.poster_path,
-        air_date: season.air_date,
-        episode_count: season.episode_count,
-      });
+      const { data: existingSeason } = await supabase
+        .from("seasons").select("id").eq("tmdb_id", season.id).single();
+
+      if (existingSeason) {
+        await supabase.from("seasons").update({
+          season_number: season.season_number,
+          name: season.name,
+          overview: season.overview,
+          poster_path: season.poster_path,
+          air_date: season.air_date,
+          episode_count: season.episode_count,
+        }).eq("id", existingSeason.id);
+      } else {
+        await supabase.from("seasons").insert({
+          series_id: result.id,
+          tmdb_id: season.id,
+          season_number: season.season_number,
+          name: season.name,
+          overview: season.overview,
+          poster_path: season.poster_path,
+          air_date: season.air_date,
+          episode_count: season.episode_count,
+        });
+      }
     }
   }
 
   if (tmdbSeries.credits?.cast) {
     const cast = tmdbSeries.credits.cast.slice(0, 30).map((c: any, i: number) => ({
-      series_id: result!.id,
+      series_id: result.id,
       tmdb_id: c.id,
       name: c.name,
       character: c.character,
       profile_path: c.profile_path,
-      order: i,
+      "order": i,
       media_type: "tv",
     }));
-    await supabase.from("credits").delete().eq("series_id", result!.id).eq("media_type", "tv").eq("department", "Acting");
-    await supabase.from("credits").insert(cast);
+    await supabase.from("credits").delete().eq("series_id", result.id).eq("media_type", "tv").eq("department", "Acting");
+    if (cast.length) await supabase.from("credits").insert(cast);
   }
 
-  await logImport("series", tmdbId, "success", `Imported ${tmdbSeries.name}`);
+  if (tmdbSeries.credits?.crew) {
+    const crew = tmdbSeries.credits.crew.map((c: any) => ({
+      series_id: result.id,
+      tmdb_id: c.id,
+      name: c.name,
+      job: c.job,
+      department: c.department,
+      profile_path: c.profile_path,
+      media_type: "tv",
+    }));
+    await supabase.from("credits").delete().eq("series_id", result.id).eq("media_type", "tv").neq("department", "Acting");
+    if (crew.length) await supabase.from("credits").insert(crew);
+  }
+
+  if (tmdbSeries.videos?.results) {
+    for (const video of tmdbSeries.videos.results) {
+      await supabase.from("videos").upsert({
+        series_id: result.id,
+        tmdb_video_id: video.id,
+        key: video.key,
+        name: video.name,
+        site: video.site,
+        type: video.type,
+        official: video.official,
+      });
+    }
+  }
+
+  await logImport("series", tmdbId, "success", `Imported ${tmdbSeries.name} (TMDB #${tmdbId})`);
   return result as unknown as Series;
 }
 
 export async function importPersonFromTmdb(tmdbId: number): Promise<Person> {
-  const tmdbPerson = await tmdbFetch<{ id: number; name: string; biography: string; birthday: string; deathday: string; gender: number; place_of_birth: string; profile_path: string; popularity: number; also_known_as: string[]; known_for_department: string }>(`/person/${tmdbId}`);
+  const tmdbPerson = await tmdbFetch<any>(`/person/${tmdbId}`);
 
   const personData = {
     tmdb_id: tmdbPerson.id,
     name: tmdbPerson.name,
-    biography: tmdbPerson.biography,
-    birthday: tmdbPerson.birthday,
-    deathday: tmdbPerson.deathday,
-    gender: tmdbPerson.gender,
-    place_of_birth: tmdbPerson.place_of_birth,
-    profile_path: tmdbPerson.profile_path,
-    popularity: tmdbPerson.popularity,
-    also_known_as: tmdbPerson.also_known_as,
-    known_for_department: tmdbPerson.known_for_department,
+    biography: tmdbPerson.biography || null,
+    birthday: tmdbPerson.birthday || null,
+    deathday: tmdbPerson.deathday || null,
+    gender: tmdbPerson.gender || 0,
+    place_of_birth: tmdbPerson.place_of_birth || null,
+    profile_path: tmdbPerson.profile_path || null,
+    popularity: tmdbPerson.popularity || 0,
+    also_known_as: tmdbPerson.also_known_as || [],
+    known_for_department: tmdbPerson.known_for_department || "Acting",
   };
 
-  const { data: existing } = await supabase.from("people").select("id").eq("tmdb_id", tmdbId).single();
+  const { data: existing } = await supabase
+    .from("people").select("id").eq("tmdb_id", tmdbId).single();
 
   let result;
   if (existing) {
-    const { data } = await supabase.from("people").update(personData).eq("id", existing.id).select().single();
-    result = data;
+    const { data, error } = await supabase
+      .from("people").update(personData).eq("id", existing.id).select().single();
+    result = assertResult(data, error, `Failed to update person "${tmdbPerson.name}"`);
   } else {
-    const { data } = await supabase.from("people").insert(personData).select().single();
-    result = data;
+    const { data, error } = await supabase
+      .from("people").insert(personData).select().single();
+    result = assertResult(data, error, `Failed to insert person "${tmdbPerson.name}"`);
   }
 
-  await logImport("person", tmdbId, "success", `Imported ${tmdbPerson.name}`);
+  await logImport("person", tmdbId, "success", `Imported ${tmdbPerson.name} (TMDB #${tmdbId})`);
   return result as unknown as Person;
 }
 
@@ -240,7 +328,43 @@ export async function bulkImportSeries(tmdbIds: number[]): Promise<void> {
 }
 
 async function logImport(type: string, tmdbId: number, status: string, message: string): Promise<void> {
-  await supabase.from("import_logs").insert({ type, tmdb_id: tmdbId, status, message });
+  const { error } = await supabase.from("import_logs").insert({ type, tmdb_id: tmdbId, status, message });
+  if (error) console.error("Failed to log import:", error.message);
+}
+
+export interface TmdbSearchResult {
+  id: number;
+  title?: string;
+  name?: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  release_date?: string;
+  first_air_date?: string;
+  vote_average: number;
+  popularity: number;
+  media_type?: string;
+  known_for_department?: string;
+  profile_path?: string | null;
+}
+
+export interface TmdbSearchResponse {
+  page: number;
+  results: TmdbSearchResult[];
+  total_pages: number;
+  total_results: number;
+}
+
+export async function searchTmdbMovies(query: string, page = 1): Promise<TmdbSearchResponse> {
+  return tmdbFetch<TmdbSearchResponse>("/search/movie", { query, page: String(page) });
+}
+
+export async function searchTmdbSeries(query: string, page = 1): Promise<TmdbSearchResponse> {
+  return tmdbFetch<TmdbSearchResponse>("/search/tv", { query, page: String(page) });
+}
+
+export async function searchTmdbPeople(query: string, page = 1): Promise<TmdbSearchResponse> {
+  return tmdbFetch<TmdbSearchResponse>("/search/person", { query, page: String(page) });
 }
 
 export async function getImportLogs(type?: string, page = 1): Promise<{ data: ImportLog[]; count: number }> {
