@@ -70,9 +70,9 @@ export function SeriesDetailPage() {
         </div>
       </section>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-32 relative z-10">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-96 relative z-10">
         <div className="flex flex-col md:flex-row gap-6 md:gap-10">
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="shrink-0 w-48 md:w-64 lg:w-72 mx-auto md:mx-0">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}             className="shrink-0 w-36 md:w-48 lg:w-56 mx-auto md:mx-0">
             <div className="aspect-[2/3] rounded-xl overflow-hidden poster-shadow">
               <ImageWithLoader src={posterUrl(series.poster_path, "large")} alt={series.name} className="w-full h-full object-cover" />
             </div>

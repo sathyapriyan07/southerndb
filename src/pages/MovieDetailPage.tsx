@@ -25,6 +25,7 @@ export function MovieDetailPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [imageFilter, setImageFilter] = useState<"all" | "poster" | "backdrop" | "logo">("all");
+  const [crewTab, setCrewTab] = useState<"info" | "cast" | "crew" | "production">("info");
 
   const { data: movie, isLoading, error } = useQuery({
     queryKey: ["movie", id],
@@ -72,6 +73,7 @@ export function MovieDetailPage() {
   const director = movie.crew?.find((c) => c.job === "Director");
   const writers = movie.crew?.filter((c) => c.department === "Writing").slice(0, 3);
   const cast = movie.cast?.filter((c) => c.department === "Acting" || !c.department)?.slice(0, 20);
+  const crew = movie.crew?.filter((c) => c.department && c.department !== "Acting");
   const genres = movie.genres || [];
   const streamingProviders = movie.streaming_providers || [];
 
@@ -90,14 +92,14 @@ export function MovieDetailPage() {
         </div>
       </section>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-32 relative z-10">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-96 relative z-10">
         <div className="flex flex-col md:flex-row gap-6 md:gap-10">
           {/* Poster */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4 }}
-            className="shrink-0 w-48 md:w-64 lg:w-72 mx-auto md:mx-0"
+            className="shrink-0 w-36 md:w-48 lg:w-56 mx-auto md:mx-0"
           >
             <div className="aspect-[2/3] rounded-xl overflow-hidden poster-shadow">
               <ImageWithLoader
@@ -126,25 +128,6 @@ export function MovieDetailPage() {
             {movie.tagline && (
               <p className="text-base text-text-secondary italic mt-2">"{movie.tagline}"</p>
             )}
-
-            <div className="flex items-center flex-wrap gap-2 mt-4">
-              <RatingBadge rating={movie.vote_average} size="md" />
-              <span className="text-sm text-text-muted">{formatNumber(movie.vote_count)} votes</span>
-              {movie.release_date && (
-                <Badge variant="outline"><Calendar className="w-3 h-3 mr-1" />{formatDate(movie.release_date)}</Badge>
-              )}
-              {movie.runtime && (
-                <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />{formatRuntime(movie.runtime)}</Badge>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {genres.map((g) => (
-                <Link key={g.id || g.name} to={`/genre/${(g.name || "unknown").toLowerCase().replace(/ /g, "-")}`}>
-                  <Badge>{g.name}</Badge>
-                </Link>
-              ))}
-            </div>
 
             <div className="flex flex-wrap items-center gap-3 mt-6">
               <Button variant="primary" size="lg" onClick={() => user && watchlistMutation.mutate()}>
@@ -183,14 +166,19 @@ export function MovieDetailPage() {
                 {director && (
                   <div>
                     <p className="text-xs text-text-muted uppercase tracking-wider">Director</p>
-                    <p className="text-sm text-text font-medium mt-0.5">{director.name}</p>
+                    <Link to={`/person/${director.person?.id || ""}`} className="text-sm text-text font-medium mt-0.5 hover:text-primary transition-colors">{director.name}</Link>
                   </div>
                 )}
                 {writers && writers.length > 0 && (
                   <div>
                     <p className="text-xs text-text-muted uppercase tracking-wider">Writers</p>
                     <p className="text-sm text-text font-medium mt-0.5">
-                      {writers.map((w) => w.name).join(", ")}
+                      {writers.map((w, i) => (
+                        <span key={w.id || i}>
+                          {i > 0 && ", "}
+                          <Link to={`/person/${w.person?.id || ""}`} className="hover:text-primary transition-colors">{w.name}</Link>
+                        </span>
+                      ))}
                     </p>
                   </div>
                 )}
@@ -243,28 +231,110 @@ export function MovieDetailPage() {
                 </div>
               </div>
             )}
-
-            {movie.production_companies && movie.production_companies.length > 0 && (
-              <div className="bg-bg-card border border-border rounded-xl p-4">
-                <h3 className="text-sm font-bold text-text mb-3">Production</h3>
-                <div className="space-y-2">
-                  {movie.production_companies.map((c) => (
-                    <p key={c.id || c.name} className="text-sm text-text">{c.name}</p>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Cast */}
-        {cast && cast.length > 0 && (
-          <section className="mt-12">
-            <h2 className="text-xl font-bold text-text font-[family-name:var(--font-display)] mb-4">Cast</h2>
-            <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-4">
+        {/* Info / Cast / Crew / Production Tabs */}
+        <section className="mt-12">
+          <div className="flex gap-1 mb-6 border-b border-border">
+            {(["info", "cast", "crew", "production"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setCrewTab(tab)}
+                className={`px-5 py-3 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+                  crewTab === tab
+                    ? "text-text border-primary"
+                    : "text-text-muted border-transparent hover:text-text"
+                }`}
+              >
+                {tab === "cast" && cast?.length ? `${tab} (${cast.length})` : tab === "crew" && crew?.length ? `${tab} (${crew.length})` : tab === "production" && movie.production_companies?.length ? `${tab} (${movie.production_companies.length})` : tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Info Tab */}
+          {crewTab === "info" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-surface border border-border">
+                <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Rating</p>
+                <div className="flex items-center gap-2">
+                  <RatingBadge rating={movie.vote_average} size="md" />
+                  <span className="text-sm text-text-muted">{formatNumber(movie.vote_count)} votes</span>
+                </div>
+              </div>
+              {movie.original_title && movie.original_title !== movie.title && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Original Title</p>
+                  <p className="text-sm text-text font-medium">{movie.original_title}</p>
+                </div>
+              )}
+              {genres.length > 0 && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Genres</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {genres.map((g) => (
+                      <Badge key={g.id || g.name}>{g.name}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {movie.runtime && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Runtime</p>
+                  <p className="text-sm text-text font-medium">{formatRuntime(movie.runtime)}</p>
+                </div>
+              )}
+              {movie.release_date && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Release Date</p>
+                  <p className="text-sm text-text font-medium">{formatDate(movie.release_date)}</p>
+                </div>
+              )}
+              {movie.original_language && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Language</p>
+                  <p className="text-sm text-text font-medium">{movie.original_language.toUpperCase()}</p>
+                </div>
+              )}
+              {movie.status && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Status</p>
+                  <p className="text-sm text-text font-medium">{movie.status}</p>
+                </div>
+              )}
+              {movie.budget && movie.budget > 0 && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Budget</p>
+                  <p className="text-sm text-text font-medium">{formatCurrency(movie.budget)}</p>
+                </div>
+              )}
+              {movie.revenue && movie.revenue > 0 && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Revenue</p>
+                  <p className="text-sm text-text font-medium">{formatCurrency(movie.revenue)}</p>
+                </div>
+              )}
+              {movie.production_countries && movie.production_countries.length > 0 && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Countries</p>
+                  <p className="text-sm text-text font-medium">{movie.production_countries.map((c) => c.name).join(", ")}</p>
+                </div>
+              )}
+              {movie.spoken_languages && movie.spoken_languages.length > 0 && (
+                <div className="p-4 rounded-xl bg-surface border border-border">
+                  <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Spoken Languages</p>
+                  <p className="text-sm text-text font-medium">{movie.spoken_languages.map((l) => l.name).join(", ")}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cast Tab */}
+          {crewTab === "cast" && cast && cast.length > 0 && (
+            <div className="space-y-2">
               {cast.map((member) => (
-                <Link key={member.id || member.name + member.character} to={`/person/${member.person?.id || ""}`} className="shrink-0 w-28 text-center group">
-                  <div className="w-20 h-20 md:w-24 md:h-24 mx-auto rounded-full overflow-hidden border-2 border-border group-hover:border-primary/50 transition-colors">
+                <Link key={member.id || member.name + member.character} to={`/person/${member.person?.id || ""}`} className="flex items-center gap-3 p-3 rounded-xl bg-surface border border-border hover:border-primary/30 transition-colors">
+                  <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-border">
                     <ImageWithLoader
                       src={profileUrl(member.profile_path, "small")}
                       alt={member.name}
@@ -272,13 +342,70 @@ export function MovieDetailPage() {
                       fallback="/placeholder-profile.svg"
                     />
                   </div>
-                  <p className="text-xs font-medium text-text mt-2 line-clamp-1">{member.name}</p>
-                  <p className="text-[10px] text-text-muted line-clamp-1">{member.character}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-text line-clamp-1">{member.name}</p>
+                    <p className="text-xs text-text-muted line-clamp-1">{member.character}</p>
+                  </div>
                 </Link>
               ))}
             </div>
-          </section>
-        )}
+          )}
+
+          {/* Crew Tab */}
+          {crewTab === "crew" && crew && crew.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {(() => {
+                const grouped = new Map<string, { member: typeof crew[0]; jobs: string[] }>();
+                for (const m of crew) {
+                  const key = m.person?.id || m.name;
+                  const existing = grouped.get(key);
+                  if (existing) {
+                    if (m.job && !existing.jobs.includes(m.job)) existing.jobs.push(m.job);
+                  } else {
+                    grouped.set(key, { member: m, jobs: m.job ? [m.job] : [] });
+                  }
+                }
+                return Array.from(grouped.values()).map(({ member, jobs }) => (
+                  <Link key={member.id || member.name} to={`/person/${member.person?.id || ""}`} className="flex items-center gap-3 p-3 rounded-xl bg-surface border border-border hover:border-primary/30 transition-colors">
+                    <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-border">
+                      <ImageWithLoader
+                        src={profileUrl(member.profile_path, "small")}
+                        alt={member.name}
+                        className="w-full h-full object-cover"
+                        fallback="/placeholder-profile.svg"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-text line-clamp-1">{member.name}</p>
+                      <p className="text-xs text-text-muted line-clamp-1">{jobs.join(", ")}</p>
+                    </div>
+                  </Link>
+                ));
+              })()}
+            </div>
+          )}
+
+          {/* Production Tab */}
+          {crewTab === "production" && movie.production_companies && movie.production_companies.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {movie.production_companies.map((c) => (
+                <div key={c.id || c.name} className="flex items-center gap-3 p-3 rounded-xl bg-surface border border-border">
+                  {c.logo_path ? (
+                    <img src={profileUrl(c.logo_path, "small")} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                      {c.name?.charAt(0)}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-text line-clamp-1">{c.name}</p>
+                    {c.origin_country && <p className="text-xs text-text-muted">{c.origin_country}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Recommendations */}
         {movie.recommendations && movie.recommendations.length > 0 && (
