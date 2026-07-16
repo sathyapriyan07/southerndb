@@ -1,32 +1,43 @@
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 
-const HomePage = lazy(() => import("@/pages/HomePage").then((m) => ({ default: m.HomePage })));
-const MoviesPage = lazy(() => import("@/pages/MoviesPage").then((m) => ({ default: m.MoviesPage })));
-const SeriesPage = lazy(() => import("@/pages/SeriesPage").then((m) => ({ default: m.SeriesPage })));
-const MovieDetailPage = lazy(() => import("@/pages/MovieDetailPage").then((m) => ({ default: m.MovieDetailPage })));
-const SeriesDetailPage = lazy(() => import("@/pages/SeriesDetailPage").then((m) => ({ default: m.SeriesDetailPage })));
-const PersonDetailPage = lazy(() => import("@/pages/PersonDetailPage").then((m) => ({ default: m.PersonDetailPage })));
-const SearchPage = lazy(() => import("@/pages/SearchPage").then((m) => ({ default: m.SearchPage })));
-const LoginPage = lazy(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
-const SignupPage = lazy(() => import("@/pages/SignupPage").then((m) => ({ default: m.SignupPage })));
-const ProfilePage = lazy(() => import("@/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
-const WatchlistPage = lazy(() => import("@/pages/WatchlistPage").then((m) => ({ default: m.WatchlistPage })));
-const DiaryPage = lazy(() => import("@/pages/DiaryPage").then((m) => ({ default: m.DiaryPage })));
-const ListsPage = lazy(() => import("@/pages/ListsPage").then((m) => ({ default: m.ListsPage })));
-const ListDetailPage = lazy(() => import("@/pages/ListDetailPage").then((m) => ({ default: m.ListDetailPage })));
-const GenrePage = lazy(() => import("@/pages/GenrePage").then((m) => ({ default: m.GenrePage })));
-const SettingsPage = lazy(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
-const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
-const AdminImport = lazy(() => import("@/pages/admin/AdminImport").then((m) => ({ default: m.AdminImport })));
-const AdminMoviesPage = lazy(() => import("@/pages/admin/AdminMoviesPage").then((m) => ({ default: m.AdminMoviesPage })));
-const AdminSeriesPage = lazy(() => import("@/pages/admin/AdminSeriesPage").then((m) => ({ default: m.AdminSeriesPage })));
-const AdminPeoplePage = lazy(() => import("@/pages/admin/AdminPeoplePage").then((m) => ({ default: m.AdminPeoplePage })));
+function lazyWithRetry(factory: () => Promise<{ default: React.ComponentType }>) {
+  return lazy(() =>
+    factory().catch((err) => {
+      if (err?.message?.includes("Failed to fetch dynamically imported module")) {
+        window.location.reload();
+      }
+      throw err;
+    })
+  );
+}
+
+const HomePage = lazyWithRetry(() => import("@/pages/HomePage").then((m) => ({ default: m.HomePage })));
+const MoviesPage = lazyWithRetry(() => import("@/pages/MoviesPage").then((m) => ({ default: m.MoviesPage })));
+const SeriesPage = lazyWithRetry(() => import("@/pages/SeriesPage").then((m) => ({ default: m.SeriesPage })));
+const MovieDetailPage = lazyWithRetry(() => import("@/pages/MovieDetailPage").then((m) => ({ default: m.MovieDetailPage })));
+const SeriesDetailPage = lazyWithRetry(() => import("@/pages/SeriesDetailPage").then((m) => ({ default: m.SeriesDetailPage })));
+const PersonDetailPage = lazyWithRetry(() => import("@/pages/PersonDetailPage").then((m) => ({ default: m.PersonDetailPage })));
+const SearchPage = lazyWithRetry(() => import("@/pages/SearchPage").then((m) => ({ default: m.SearchPage })));
+const LoginPage = lazyWithRetry(() => import("@/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
+const SignupPage = lazyWithRetry(() => import("@/pages/SignupPage").then((m) => ({ default: m.SignupPage })));
+const ProfilePage = lazyWithRetry(() => import("@/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const WatchlistPage = lazyWithRetry(() => import("@/pages/WatchlistPage").then((m) => ({ default: m.WatchlistPage })));
+const DiaryPage = lazyWithRetry(() => import("@/pages/DiaryPage").then((m) => ({ default: m.DiaryPage })));
+const ListsPage = lazyWithRetry(() => import("@/pages/ListsPage").then((m) => ({ default: m.ListsPage })));
+const ListDetailPage = lazyWithRetry(() => import("@/pages/ListDetailPage").then((m) => ({ default: m.ListDetailPage })));
+const GenrePage = lazyWithRetry(() => import("@/pages/GenrePage").then((m) => ({ default: m.GenrePage })));
+const SettingsPage = lazyWithRetry(() => import("@/pages/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const AdminDashboard = lazyWithRetry(() => import("@/pages/admin/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
+const AdminImport = lazyWithRetry(() => import("@/pages/admin/AdminImport").then((m) => ({ default: m.AdminImport })));
+const AdminMoviesPage = lazyWithRetry(() => import("@/pages/admin/AdminMoviesPage").then((m) => ({ default: m.AdminMoviesPage })));
+const AdminSeriesPage = lazyWithRetry(() => import("@/pages/admin/AdminSeriesPage").then((m) => ({ default: m.AdminSeriesPage })));
+const AdminPeoplePage = lazyWithRetry(() => import("@/pages/admin/AdminPeoplePage").then((m) => ({ default: m.AdminPeoplePage })));
 
 function PageLoader() {
   return (
