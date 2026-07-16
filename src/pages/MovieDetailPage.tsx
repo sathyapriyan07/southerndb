@@ -338,10 +338,11 @@ export function MovieDetailPage() {
           {crewTab === "cast" && cast && cast.length > 0 && (
             <div className="space-y-2">
               {cast.map((member) => (
-                <Link key={member.id || member.name + member.character} to={`/person/${member.person?.id || ""}`} className="flex items-center gap-3 p-3 rounded-xl bg-surface border border-border hover:border-primary/30 transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-text line-clamp-1">{member.name}</p>
-                    <p className="text-xs text-text-muted line-clamp-1">{member.character}</p>
+                <Link key={member.id || member.name + member.character} to={`/person/${member.person?.id || ""}`} className="relative block p-3 pr-24 rounded-xl bg-surface border border-border hover:border-primary/30 transition-colors overflow-hidden">
+                  <p className="text-sm font-medium text-text line-clamp-1">{member.name}</p>
+                  <p className="text-xs text-text-muted line-clamp-1">{member.character}</p>
+                  <div className="absolute right-0 bottom-0 w-16 h-20 rounded-tl-lg overflow-hidden border-l border-t border-border opacity-50">
+                    <ImageWithLoader src={profileUrl(member.person?.card_image_path || member.profile_path, "small")} alt="" className="w-full h-full object-cover" fallback="/placeholder-profile.svg" />
                   </div>
                 </Link>
               ))}
@@ -363,10 +364,11 @@ export function MovieDetailPage() {
                   }
                 }
                 return Array.from(grouped.values()).map(({ member, jobs }) => (
-                  <Link key={member.id || member.name} to={`/person/${member.person?.id || ""}`} className="flex items-center gap-3 p-3 rounded-xl bg-surface border border-border hover:border-primary/30 transition-colors">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text line-clamp-1">{member.name}</p>
-                      <p className="text-xs text-text-muted line-clamp-1">{jobs.join(", ")}</p>
+                  <Link key={member.id || member.name} to={`/person/${member.person?.id || ""}`} className="relative block p-3 pr-20 pb-20 rounded-xl bg-surface border border-border hover:border-primary/30 transition-colors overflow-hidden">
+                    <p className="text-sm font-medium text-text line-clamp-1">{member.name}</p>
+                    <p className="text-xs text-text-muted line-clamp-1">{jobs.join(", ")}</p>
+                    <div className="absolute right-0 bottom-0 w-14 h-16 rounded-tl-lg overflow-hidden border-l border-t border-border opacity-50">
+                      <ImageWithLoader src={profileUrl(member.person?.card_image_path || member.profile_path, "small")} alt="" className="w-full h-full object-cover" fallback="/placeholder-profile.svg" />
                     </div>
                   </Link>
                 ));

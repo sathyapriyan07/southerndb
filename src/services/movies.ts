@@ -40,8 +40,8 @@ export async function getMovie(id: string): Promise<Movie> {
     .select(`
       *,
       genres:movie_genres(genre:genres(*)),
-      cast:credits(*, person:people(id, tmdb_id)),
-      crew:credits(*, person:people(id, tmdb_id)),
+      cast:credits(*, person:people(id, tmdb_id, card_image_path)),
+      crew:credits(*, person:people(id, tmdb_id, card_image_path)),
       videos:videos(*),
       images:images(*),
       streaming_providers:providers(*),

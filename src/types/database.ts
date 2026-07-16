@@ -113,6 +113,7 @@ export interface Person {
   gender: number;
   place_of_birth: string | null;
   profile_path: string | null;
+  card_image_path: string | null;
   popularity: number;
   also_known_as: string[];
   known_for_department: string;
@@ -171,7 +172,7 @@ export interface CastMember {
   credit_id?: string;
   department?: string;
   gender?: number;
-  person?: { id: string; tmdb_id: number } | null;
+  person?: { id: string; tmdb_id: number; card_image_path: string | null } | null;
 }
 
 export interface CrewMember {
@@ -182,7 +183,7 @@ export interface CrewMember {
   department: string;
   profile_path: string | null;
   credit_id?: string;
-  person?: { id: string; tmdb_id: number } | null;
+  person?: { id: string; tmdb_id: number; card_image_path: string | null } | null;
 }
 
 export interface CreditItem {

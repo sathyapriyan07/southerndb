@@ -26,13 +26,14 @@ interface PersonForm {
   gender: number;
   place_of_birth: string;
   profile_path: string;
+  card_image_path: string;
   popularity: number;
   known_for_department: string;
 }
 
 const EMPTY_FORM: PersonForm = {
   tmdb_id: 0, name: "", biography: "", birthday: "", deathday: "",
-  gender: 0, place_of_birth: "", profile_path: "", popularity: 0,
+  gender: 0, place_of_birth: "", profile_path: "", card_image_path: "", popularity: 0,
   known_for_department: "Acting",
 };
 
@@ -118,6 +119,7 @@ export function AdminPeoplePage() {
       gender: p.gender || 0,
       place_of_birth: p.place_of_birth || "",
       profile_path: p.profile_path || "",
+      card_image_path: p.card_image_path || "",
       popularity: p.popularity || 0,
       known_for_department: p.known_for_department || "Acting",
     });
@@ -324,8 +326,9 @@ export function AdminPeoplePage() {
                           const file = e.target.files?.[0];
                           if (!file || !editId) return;
                           const ext = file.name.split(".").pop();
-                          const path = `people/${editId}.${ext}`;
-                          const { error } = await supabase.storage.from("admin-uploads").upload(path, file, { upsert: true });
+                          const path = `people/profile-${editId}.${ext}`;
+                          const contentType = file.type || (ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg");
+                          const { error } = await supabase.storage.from("admin-uploads").upload(path, file, { upsert: true, contentType });
                           if (!error) {
                             const { data: urlData } = supabase.storage.from("admin-uploads").getPublicUrl(path);
                             setField("profile_path", urlData.publicUrl);
@@ -336,16 +339,57 @@ export function AdminPeoplePage() {
                   </div>
                   <Input className="mt-2" value={form.profile_path} onChange={(e) => setField("profile_path", e.target.value)} placeholder="Or paste image URL" />
                 </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs text-text-muted mb-1 block">Card Image (used in cast/crew lists)</label>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 px-4 py-2 bg-surface border border-border rounded-lg text-sm text-text cursor-pointer hover:bg-surface-hover transition-colors">
+                      <Upload className="w-4 h-4" />
+                      Upload Card Image
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !editId) return;
+                          const ext = file.name.split(".").pop();
+                          const path = `people/card-${editId}.${ext}`;
+                          const contentType = file.type || (ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg");
+                          const { error } = await supabase.storage.from("admin-uploads").upload(path, file, { upsert: true, contentType });
+                          if (!error) {
+                            const { data: urlData } = supabase.storage.from("admin-uploads").getPublicUrl(path);
+                            setField("card_image_path", urlData.publicUrl);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <Input className="mt-2" value={form.card_image_path} onChange={(e) => setField("card_image_path", e.target.value)} placeholder="Or paste card image URL" />
+                </div>
               </div>
 
-              {form.profile_path && (
-                <div className="mt-4">
-                  <p className="text-xs text-text-muted mb-1">Photo preview</p>
-                  <img
-                    src={form.profile_path.startsWith("http") ? form.profile_path : `${IMAGE_BASE_URL}/w185${form.profile_path}`}
-                    alt=""
-                    className="w-20 h-20 rounded-full object-cover"
-                  />
+              {(form.profile_path || form.card_image_path) && (
+                <div className="mt-4 flex items-start gap-6">
+                  {form.profile_path && (
+                    <div>
+                      <p className="text-xs text-text-muted mb-1">Profile photo</p>
+                      <img
+                        src={form.profile_path.startsWith("http") ? form.profile_path : `${IMAGE_BASE_URL}/w185${form.profile_path}`}
+                        alt=""
+                        className="w-20 h-20 rounded-full object-cover"
+                      />
+                    </div>
+                  )}
+                  {form.card_image_path && (
+                    <div>
+                      <p className="text-xs text-text-muted mb-1">Card image</p>
+                      <img
+                        src={form.card_image_path}
+                        alt=""
+                        className="w-16 h-20 rounded-lg object-cover"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -38,8 +38,8 @@ export async function getSeriesById(id: string): Promise<Series> {
     .select(`
       *,
       genres:series_genres(genre:genres(*)),
-      cast:credits(*, person:people(id, tmdb_id)),
-      crew:credits(*, person:people(id, tmdb_id)),
+      cast:credits(*, person:people(id, tmdb_id, card_image_path)),
+      crew:credits(*, person:people(id, tmdb_id, card_image_path)),
       videos:videos(*),
       images:images(*),
       streaming_providers:providers(*),

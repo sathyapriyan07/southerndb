@@ -80,6 +80,7 @@ CREATE TABLE people (
   gender INTEGER DEFAULT 0,
   place_of_birth TEXT,
   profile_path TEXT,
+  card_image_path TEXT,
   popularity NUMERIC(10,3) DEFAULT 0,
   also_known_as TEXT[] DEFAULT '{}',
   known_for_department TEXT DEFAULT 'Acting',

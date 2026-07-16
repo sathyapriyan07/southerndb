@@ -206,7 +206,7 @@ export function SeriesDetailPage() {
               {cast.map((member) => (
                 <Link key={member.id || member.name + member.character} to={`/person/${member.person?.id || ""}`} className="shrink-0 w-28 text-center group">
                   <div className="w-20 h-20 md:w-24 md:h-24 mx-auto rounded-full overflow-hidden border-2 border-border group-hover:border-primary/50 transition-colors">
-                    <ImageWithLoader src={profileUrl(member.profile_path, "small")} alt={member.name} className="w-full h-full object-cover" fallback="/placeholder-profile.svg" />
+                    <ImageWithLoader src={profileUrl(member.person?.card_image_path || member.profile_path, "small")} alt={member.name} className="w-full h-full object-cover" fallback="/placeholder-profile.svg" />
                   </div>
                   <p className="text-xs font-medium text-text mt-2 line-clamp-1">{member.name}</p>
                   <p className="text-[10px] text-text-muted line-clamp-1">{member.character}</p>
