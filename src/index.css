@@ -140,8 +140,8 @@
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    rgba(0, 0, 0, 0.5) 10%,
-    rgba(0, 0, 0, 0.9) 35%,
+    rgba(0, 0, 0, 0.3) 10%,
+    rgba(0, 0, 0, 0.8) 35%,
     #000000 50%,
     #000000 100%
   );
@@ -150,9 +150,11 @@
 @utility hero-gradient-left {
   background: linear-gradient(
     to right,
-    rgba(0, 0, 0, 0.95) 0%,
-    rgba(0, 0, 0, 0.7) 40%,
-    transparent 100%
+    rgba(0, 0, 0, 0.8) 0%,
+    rgba(0, 0, 0, 0.4) 30%,
+    transparent 50%,
+    rgba(0, 0, 0, 0.4) 70%,
+    rgba(0, 0, 0, 0.8) 100%
   );
 }
 

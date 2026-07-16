@@ -63,7 +63,7 @@ export function AdminPeoplePage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const input = { ...form };
+      const input = { ...form, birthday: form.birthday || null, deathday: form.deathday || null };
       if (editId) return updatePerson(editId, input);
       return createPerson(input);
     },
