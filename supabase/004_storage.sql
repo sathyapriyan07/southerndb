@@ -13,7 +13,7 @@ VALUES
   ('avatars', 'avatars', TRUE, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
   ('banners', 'banners', TRUE, 10485760, ARRAY['image/jpeg', 'image/png', 'image/webp']),
   ('news', 'news', TRUE, 10485760, ARRAY['image/jpeg', 'image/png', 'image/webp']),
-  ('admin-uploads', 'admin-uploads', FALSE, 20971520, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'])
+  ('admin-uploads', 'admin-uploads', TRUE, 20971520, ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'])
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
@@ -109,17 +109,14 @@ CREATE POLICY "news_admin_delete"
   );
 
 -- ============================================================
--- 5. ADMIN UPLOADS — Admin only (private)
+-- 5. ADMIN UPLOADS — Public read, admin write
 -- ============================================================
 
-CREATE POLICY "admin_uploads_admin_read"
+-- Anyone can view admin uploads (needed for cast/crew images on public pages)
+CREATE POLICY "admin_uploads_public_read"
   ON storage.objects FOR SELECT
   USING (
     bucket_id = 'admin-uploads'
-    AND (
-      auth.role() = 'service_role'
-      OR public.is_admin()
-    )
   );
 
 CREATE POLICY "admin_uploads_admin_insert"

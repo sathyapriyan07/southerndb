@@ -117,17 +117,9 @@ export function MovieDetailPage() {
             transition={{ duration: 0.4, delay: 0.1 }}
             className="flex-1 min-w-0"
           >
-            {movie.logo_path ? (
-              <img
-                src={`${IMAGE_BASE_URL}/w500${movie.logo_path}`}
-                alt={movie.title}
-                className="h-12 md:h-16 lg:h-20 object-contain mt-2"
-              />
-            ) : (
-              <h1 className="text-3xl md:text-5xl font-black font-[family-name:var(--font-display)] text-text leading-tight">
-                {movie.title}
-              </h1>
-            )}
+            <h1 className="text-3xl md:text-5xl font-black font-[family-name:var(--font-display)] text-text leading-tight">
+              {movie.title}
+            </h1>
 
             {movie.original_title !== movie.title && (
               <p className="text-sm text-text-muted mt-1">Original title: {movie.original_title}</p>
