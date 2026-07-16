@@ -130,7 +130,7 @@ export function MovieDetailPage() {
 
             <div className="flex flex-wrap gap-1.5 mt-3">
               {genres.map((g) => (
-                <Link key={g.id || g.name} to={`/genre/${g.name.toLowerCase().replace(/ /g, "-")}`}>
+                <Link key={g.id || g.name} to={`/genre/${(g.name || "unknown").toLowerCase().replace(/ /g, "-")}`}>
                   <Badge>{g.name}</Badge>
                 </Link>
               ))}

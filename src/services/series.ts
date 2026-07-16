@@ -48,7 +48,17 @@ export async function getSeriesById(id: string): Promise<Series> {
     .eq("id", id)
     .single();
   if (error) throw error;
-  return data as unknown as Series;
+
+  const raw = data as any;
+  return {
+    ...raw,
+    genres: (raw.genres || []).map((g: any) => g.genre).filter(Boolean),
+    cast: (raw.cast || []).filter((c: any) => c.department === "Acting" || !c.department),
+    crew: (raw.crew || []).filter((c: any) => c.department && c.department !== "Acting"),
+    streaming_providers: raw.streaming_providers || [],
+    recommendations: raw.recommendations || [],
+    similar: raw.similar || [],
+  } as Series;
 }
 
 export async function getTrendingSeries(): Promise<Series[]> {

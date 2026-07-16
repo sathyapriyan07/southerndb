@@ -50,7 +50,19 @@ export async function getMovie(id: string): Promise<Movie> {
     .eq("id", id)
     .single();
   if (error) throw error;
-  return data as unknown as Movie;
+
+  const raw = data as any;
+  return {
+    ...raw,
+    genres: (raw.genres || []).map((g: any) => g.genre).filter(Boolean),
+    cast: (raw.cast || []).filter((c: any) => c.department === "Acting" || !c.department),
+    crew: (raw.crew || []).filter((c: any) => c.department && c.department !== "Acting"),
+    streaming_providers: raw.streaming_providers || [],
+    recommendations: raw.recommendations || [],
+    similar: raw.similar || [],
+    keywords: raw.keywords || [],
+    Belongs_to_collection: raw.Belongs_to_collection || null,
+  } as Movie;
 }
 
 export async function getMovieByTmdbId(tmdbId: number): Promise<Movie | null> {

@@ -619,3 +619,24 @@ CREATE INDEX idx_news_published ON news(published_at DESC);
 -- Import logs
 CREATE INDEX idx_import_logs_type ON import_logs(type);
 CREATE INDEX idx_import_logs_status ON import_logs(status);
+
+-- ============================================================
+-- TABLE PERMISSIONS
+-- ============================================================
+-- Grant the anon role read-only access to public tables.
+-- Grant the authenticated role full DML on all tables.
+-- RLS policies (002_rls_policies.sql) restrict who can do what.
+
+-- anon: read-only for public browsing
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon;
+
+-- authenticated: full DML for logged-in users (RLS governs access)
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+
+-- service_role: full access (used by admin/server operations)
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO service_role;
+
+-- Ensure future tables also get these grants
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO anon;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO service_role;

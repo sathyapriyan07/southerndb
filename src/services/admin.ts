@@ -142,6 +142,12 @@ export async function importMovieFromTmdb(tmdbId: number): Promise<Movie> {
     }
   }
 
+  const personIds = [
+    ...(tmdbMovie.credits?.cast?.map((c: any) => c.id) || []),
+    ...(tmdbMovie.credits?.crew?.map((c: any) => c.id) || []),
+  ];
+  await upsertPersonsFromTmdbIds(personIds);
+
   await logImport("movie", tmdbId, "success", `Imported ${tmdbMovie.title} (TMDB #${tmdbId})`);
   return result as unknown as Movie;
 }
@@ -268,6 +274,12 @@ export async function importSeriesFromTmdb(tmdbId: number): Promise<Series> {
     }
   }
 
+  const personIds = [
+    ...(tmdbSeries.credits?.cast?.map((c: any) => c.id) || []),
+    ...(tmdbSeries.credits?.crew?.map((c: any) => c.id) || []),
+  ];
+  await upsertPersonsFromTmdbIds(personIds);
+
   await logImport("series", tmdbId, "success", `Imported ${tmdbSeries.name} (TMDB #${tmdbId})`);
   return result as unknown as Series;
 }
@@ -330,6 +342,36 @@ export async function bulkImportSeries(tmdbIds: number[]): Promise<void> {
 async function logImport(type: string, tmdbId: number, status: string, message: string): Promise<void> {
   const { error } = await supabase.from("import_logs").insert({ type, tmdb_id: tmdbId, status, message });
   if (error) console.error("Failed to log import:", error.message);
+}
+
+async function upsertPersonsFromTmdbIds(tmdbIds: number[]): Promise<void> {
+  const unique = [...new Set(tmdbIds)].filter((id) => id > 0);
+  if (!unique.length) return;
+
+  const { data: existing } = await supabase.from("people").select("tmdb_id").in("tmdb_id", unique);
+  const existingSet = new Set((existing || []).map((p) => p.tmdb_id));
+  const toFetch = unique.filter((id) => !existingSet.has(id));
+
+  for (const tmdbId of toFetch) {
+    try {
+      const tmdbPerson = await tmdbFetch<any>(`/person/${tmdbId}`);
+      await supabase.from("people").upsert({
+        tmdb_id: tmdbPerson.id,
+        name: tmdbPerson.name,
+        biography: tmdbPerson.biography || null,
+        birthday: tmdbPerson.birthday || null,
+        deathday: tmdbPerson.deathday || null,
+        gender: tmdbPerson.gender || 0,
+        place_of_birth: tmdbPerson.place_of_birth || null,
+        profile_path: tmdbPerson.profile_path || null,
+        popularity: tmdbPerson.popularity || 0,
+        also_known_as: tmdbPerson.also_known_as || [],
+        known_for_department: tmdbPerson.known_for_department || "Acting",
+      }, { onConflict: "tmdb_id" });
+    } catch (err) {
+      console.error(`Failed to upsert person TMDB #${tmdbId}:`, err);
+    }
+  }
 }
 
 export interface TmdbSearchResult {
